@@ -1,0 +1,16 @@
+src/
+tests/
+examples/
+docs/
+scripts/
+.github/
+*.md
+!README.md
+tsconfig*.json
+jest.config.js
+.eslintrc.js
+.prettierrc
+rollup.config.js
+coverage/
+.nyc_output/
+*.log
