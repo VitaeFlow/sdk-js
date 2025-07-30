@@ -10,6 +10,10 @@ import {
   loadPDF,
   createTimestamp
 } from './utils';
+import { 
+  createFileSpec, 
+  createVFMetadataForEmbed 
+} from './metadata';
 import { addXMPToPDF, createXMPDataForEmbed } from './xmp';
 import { 
   compressData, 
@@ -65,8 +69,20 @@ export async function embedResume(
     // Step 6: Remove existing file if it exists
     removeEmbeddedFile(pdfDoc, RESUME_FILENAME);
     
-    // Step 7: Embed file using working approach
-    await embedFileInPDF(pdfDoc, RESUME_FILENAME, finalData);
+    // Step 7: Embed file using enhanced approach with VF metadata
+    const timestamp = createTimestamp();
+    await embedFileInPDF(
+      pdfDoc, 
+      RESUME_FILENAME, 
+      finalData, 
+      opts.includeVFMetadata ? {
+        checksum,
+        created: timestamp,
+        compressed: compress,
+        originalSize,
+        compressedSize: finalData.length
+      } : undefined
+    );
     
     // Step 8: Add XMP metadata (unless skipped)
     if (!opts.skipXMP) {
@@ -103,10 +119,18 @@ export async function embedResume(
 async function embedFileInPDF(
   pdfDoc: PDFDocument,
   fileName: string,
-  fileData: Uint8Array
+  fileData: Uint8Array,
+  vfMetadata?: {
+    checksum: string;
+    created: string;
+    compressed: boolean;
+    originalSize: number;
+    compressedSize: number;
+  }
 ): Promise<void> {
-  // Create file stream
-  const fileStream = pdfDoc.context.flateStream(fileData);
+  // Create file stream - use stream() instead of flateStream() to avoid double compression
+  // when fileData is already compressed with our compression system
+  const fileStream = pdfDoc.context.stream(fileData);
   const fileStreamRef = pdfDoc.context.register(fileStream);
   
   // Set stream dictionary
@@ -114,13 +138,25 @@ async function embedFileInPDF(
   fileStream.dict.set(PDFName.of('Subtype'), PDFName.of('application/json'));
   fileStream.dict.set(PDFName.of('Length'), pdfDoc.context.obj(fileData.length));
   
-  // Create file specification
-  const fileSpec = pdfDoc.context.obj({
-    Type: 'Filespec',
-    F: PDFString.of(fileName),
-    UF: PDFString.of(fileName),
-    EF: { F: fileStreamRef }
-  });
+  // Create file specification with optional VF metadata
+  let fileSpec: any;
+  if (vfMetadata) {
+    const vfMetadataForSpec = createVFMetadataForEmbed(
+      vfMetadata.checksum,
+      vfMetadata.created,
+      vfMetadata.compressed,
+      vfMetadata.originalSize,
+      vfMetadata.compressedSize
+    );
+    fileSpec = createFileSpec(pdfDoc, fileStreamRef, vfMetadataForSpec);
+  } else {
+    fileSpec = pdfDoc.context.obj({
+      Type: 'Filespec',
+      F: PDFString.of(fileName),
+      UF: PDFString.of(fileName),
+      EF: { F: fileStreamRef }
+    });
+  }
   const fileSpecRef = pdfDoc.context.register(fileSpec);
   
   // Get or create Names dictionary

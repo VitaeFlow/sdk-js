@@ -30,6 +30,7 @@ export const DEFAULT_EMBED_OPTIONS = {
   validateRules: true,
   compress: 'auto' as const,
   skipXMP: false,
+  includeVFMetadata: true,
 };
 
 export const DEFAULT_EXTRACT_OPTIONS = {

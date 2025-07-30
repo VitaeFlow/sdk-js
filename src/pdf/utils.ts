@@ -4,7 +4,8 @@
 
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFString } from 'pdf-lib';
 import { ErrorCode, createError } from '../validation/errors';
-import { MAX_FILE_SIZE } from '../constants';
+import { MAX_FILE_SIZE, RESUME_FILENAME } from '../constants';
+import { extractXMPFromPDF } from './xmp';
 
 /**
  * Load and validate a PDF document
@@ -101,7 +102,8 @@ export function setEmbeddedFilesNamesArray(embeddedFilesDict: PDFDict, namesArra
  */
 export function findEmbeddedFileByName(
   namesArray: PDFArray,
-  fileName: string
+  fileName: string,
+  pdfDoc?: PDFDocument
 ): { index: number; fileSpec: PDFDict } | null {
   const elements = namesArray.asArray();
   
@@ -121,8 +123,23 @@ export function findEmbeddedFileByName(
       continue;
     }
     
-    if (name === fileName && fileSpecElement instanceof PDFDict) {
-      return { index: i, fileSpec: fileSpecElement };
+    if (name === fileName) {
+      // Resolve PDFRef to get actual PDFDict if needed
+      let fileSpec: PDFDict;
+      if (fileSpecElement instanceof PDFDict) {
+        fileSpec = fileSpecElement;
+      } else if (pdfDoc) {
+        const resolved = pdfDoc.context.lookup(fileSpecElement);
+        if (resolved instanceof PDFDict) {
+          fileSpec = resolved;
+        } else {
+          continue;
+        }
+      } else {
+        continue;
+      }
+      
+      return { index: i, fileSpec };
     }
   }
   
@@ -162,4 +179,69 @@ export function createTimestamp(): string {
  */
 export function ensureUint8Array(data: Buffer | Uint8Array): Uint8Array {
   return data instanceof Buffer ? new Uint8Array(data) : data;
+}
+
+/**
+ * Quick check if a PDF contains VitaeFlow resume data
+ * Optimized for performance - no JSON parsing or full extraction
+ */
+export async function hasResume(pdf: Buffer | Uint8Array): Promise<boolean> {
+  try {
+    // Step 1: Load PDF (minimal)
+    const pdfDoc = await loadPDF(pdf);
+    
+    // Step 2: Check XMP metadata first (fastest check)
+    try {
+      const xmpData = extractXMPFromPDF(pdfDoc);
+      if (xmpData && xmpData.hasStructuredData) {
+        return true;
+      }
+    } catch (error) {
+      // XMP check failed, continue to embedded files check
+    }
+    
+    // Step 3: Check for embedded "resume.json" file
+    try {
+      const catalog = pdfDoc.catalog;
+      const namesDictRef = catalog.get(PDFName.of('Names'));
+      
+      if (!namesDictRef) {
+        return false;
+      }
+      
+      // Resolve reference to get actual PDFDict
+      const namesDict = pdfDoc.context.lookup(namesDictRef);
+      if (!namesDict || !(namesDict instanceof PDFDict)) {
+        return false;
+      }
+      
+      const embeddedFilesDictRef = namesDict.get(PDFName.of('EmbeddedFiles'));
+      if (!embeddedFilesDictRef) {
+        return false;
+      }
+      
+      // Resolve reference to get actual PDFDict
+      const embeddedFilesDict = pdfDoc.context.lookup(embeddedFilesDictRef);
+      if (!embeddedFilesDict || !(embeddedFilesDict instanceof PDFDict)) {
+        return false;
+      }
+      
+      const namesArray = getEmbeddedFilesNamesArray(embeddedFilesDict);
+      if (!namesArray) {
+        return false;
+      }
+      
+      // Look for "resume.json" in the names array
+      const found = findEmbeddedFileByName(namesArray, RESUME_FILENAME, pdfDoc);
+      return found !== null;
+      
+    } catch (error) {
+      // Embedded files check failed
+      return false;
+    }
+    
+  } catch (error) {
+    // Handle errors silently and return false
+    return false;
+  }
 }

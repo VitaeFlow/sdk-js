@@ -33,6 +33,12 @@ export interface EmbedOptions {
   skipXMP?: boolean;
 
   /**
+   * Whether to include VitaeFlow metadata in the FileSpec
+   * @default true
+   */
+  includeVFMetadata?: boolean;
+
+  /**
    * Custom metadata for future extensions
    */
   customMetadata?: Record<string, any>;

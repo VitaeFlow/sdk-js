@@ -16,5 +16,5 @@ coverage/
 .cache/
 temp/
 tmp/
-.real-test/
+.real-test*/
 .claude/

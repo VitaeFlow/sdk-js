@@ -34,7 +34,7 @@ export function createXMPMetadata(
   const xmpXml = generateXMPXml(xmpData);
   const xmpBytes = new TextEncoder().encode(xmpXml);
   
-  const xmpStream = pdfDoc.context.flateStream(xmpBytes);
+  const xmpStream = pdfDoc.context.stream(xmpBytes);
   xmpStream.dict.set(PDFName.of('Type'), PDFName.of('Metadata'));
   xmpStream.dict.set(PDFName.of('Subtype'), PDFName.of('XML'));
   
@@ -88,8 +88,7 @@ export function addXMPToPDF(pdfDoc: PDFDocument, xmpData: VitaeFlowXMP): void {
  */
 export function parseXMPMetadata(metadataStream: PDFStream): VitaeFlowXMP | null {
   try {
-    // Get stream contents using the contents property (readonly access)
-    // We need to cast to any to access internal stream data
+    // Get stream contents (should be uncompressed XML now)
     const streamData = (metadataStream as any).contents || new Uint8Array();
     const xmpXml = new TextDecoder().decode(streamData);
     
