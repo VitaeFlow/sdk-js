@@ -148,4 +148,34 @@ export interface Rule {
    * If not specified, applies to all versions
    */
   appliesTo?: string;
+
+  /**
+   * Category for organizing and filtering rules
+   * Use cases:
+   * - 'ats-optimization': Rules to improve ATS parsing success
+   * - 'compliance': Legal/regulatory requirements (GDPR, sector-specific)
+   * - 'quality': Data quality and consistency checks  
+   * - 'performance': File size and processing efficiency
+   */
+  category?: 'ats-optimization' | 'compliance' | 'quality' | 'performance';
+
+  /**
+   * Execution priority for rule ordering (1-10)
+   * Lower numbers execute first, useful for:
+   * - Running fast rules before expensive ones
+   * - Ensuring prerequisite validations run first
+   * - Optimizing validation performance
+   * @default 5
+   */
+  priority?: number;
+
+  /**
+   * Detailed documentation for the rule
+   * Should explain:
+   * - What the rule validates and why
+   * - Common failure scenarios  
+   * - How to fix violations
+   * - Business impact of violations
+   */
+  description?: string;
 }

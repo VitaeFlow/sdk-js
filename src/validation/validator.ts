@@ -3,11 +3,12 @@
  * Provides schema and business rules validation with version support
  */
 
-import Ajv, { ErrorObject } from 'ajv';
+import Ajv, { ErrorObject, ValidateFunction } from 'ajv';
 import { Resume } from '../types/resume';
 import { ValidationOptions, ValidationResult, ValidationIssue, Rule } from '../types';
 import { CURRENT_VERSION, DEFAULT_VALIDATION_OPTIONS } from '../constants';
 import { getResumeSchema } from '../schemas';
+import { getCoreRulesForVersion } from './rules';
 
 /**
  * Main validator class for resume data
@@ -15,6 +16,7 @@ import { getResumeSchema } from '../schemas';
 export class ResumeValidator {
   private ajv: Ajv;
   private customRules: Rule[] = [];
+  private static schemaCache = new Map<string, ValidateFunction>();
 
   constructor() {
     this.ajv = new Ajv({
@@ -45,24 +47,28 @@ export class ResumeValidator {
     // Step 1: Detect or use provided version
     const version = opts.version || this.detectVersion(data);
     
-    // Step 2: Load and compile schema
-    const schema = getResumeSchema(version);
-    if (!schema) {
-      return {
-        ok: false,
-        schemaValid: false,
-        rulesValid: false,
-        version,
-        issues: [{
-          type: 'schema',
-          severity: 'error',
-          message: `No schema available for version ${version}`,
-          path: 'schema_version',
-        }],
-      };
+    // Step 2: Load and compile schema (with caching)
+    let validate = ResumeValidator.schemaCache.get(version);
+    if (!validate) {
+      const schema = getResumeSchema(version);
+      if (!schema) {
+        return {
+          ok: false,
+          schemaValid: false,
+          rulesValid: false,
+          version,
+          issues: [{
+            type: 'schema',
+            severity: 'error',
+            message: `No schema available for version ${version}`,
+            path: 'schema_version',
+          }],
+        };
+      }
+      
+      validate = this.ajv.compile(schema);
+      ResumeValidator.schemaCache.set(version, validate);
     }
-    
-    const validate = this.ajv.compile(schema);
     
     // Step 3: Validate against schema
     const schemaValid = validate(data);
@@ -179,7 +185,7 @@ export class ResumeValidator {
   }
 
   /**
-   * Validate business rules
+   * Validate business rules with priority ordering and enhanced error handling
    */
   private async validateRules(
     data: any, 
@@ -188,7 +194,7 @@ export class ResumeValidator {
   ): Promise<{ valid: boolean; issues: ValidationIssue[] }> {
     const issues: ValidationIssue[] = [];
     
-    // Get core rules for version (stub for now)
+    // Get core rules for version
     const coreRules = this.getCoreRulesForVersion(version);
     
     // Combine with custom rules
@@ -198,13 +204,31 @@ export class ResumeValidator {
       ...this.customRules,
     ];
     
-    // Filter out skipped rules
-    const activeRules = allRules.filter(rule => 
-      !options.skipRules?.includes(rule.id)
-    );
+    // Filter out skipped rules and apply version compatibility
+    const activeRules = allRules.filter(rule => {
+      // Skip if explicitly excluded
+      if (options.skipRules?.includes(rule.id)) {
+        return false;
+      }
+      
+      // Check version compatibility if appliesTo is specified
+      if (rule.appliesTo) {
+        // TODO: Implement semver compatibility check
+        // For now, assume all rules apply to all versions
+      }
+      
+      return true;
+    });
     
-    // Execute all rules
-    for (const rule of activeRules) {
+    // Sort rules by priority (lower numbers first, default 5)
+    const sortedRules = activeRules.sort((a, b) => {
+      const priorityA = a.priority ?? 5;
+      const priorityB = b.priority ?? 5;
+      return priorityA - priorityB;
+    });
+    
+    // Execute all rules in priority order
+    for (const rule of sortedRules) {
       try {
         const result = rule.validate(data);
         if (!result.valid) {
@@ -216,6 +240,11 @@ export class ResumeValidator {
           severity: 'error',
           message: `Rule ${rule.id} failed: ${error}`,
           ruleId: rule.id,
+          context: {
+            category: rule.category,
+            priority: rule.priority,
+            description: rule.description
+          }
         });
       }
     }
@@ -226,67 +255,9 @@ export class ResumeValidator {
 
   /**
    * Get core validation rules for a specific version
-   * This is a stub that will be enhanced in Phase 3
    */
   private getCoreRulesForVersion(version: string): Rule[] {
-    const coreRules: Rule[] = [
-      {
-        id: 'required-sections',
-        message: 'Resume must have at least one of: personal information, work experience, or education',
-        severity: 'error',
-        validate: (resume: any) => {
-          const hasPersonal = resume.personal_information && 
-            Object.keys(resume.personal_information).length > 0;
-          const hasWork = resume.work_experience && 
-            Array.isArray(resume.work_experience) && 
-            resume.work_experience.length > 0;
-          const hasEducation = resume.education && 
-            Array.isArray(resume.education) && 
-            resume.education.length > 0;
-          
-          const valid = hasPersonal || hasWork || hasEducation;
-          
-          return {
-            valid,
-            issues: valid ? [] : [{
-              type: 'rule',
-              severity: 'error',
-              message: 'Resume must have at least one of: personal information, work experience, or education',
-              ruleId: 'required-sections',
-            }],
-          };
-        },
-      },
-      {
-        id: 'email-format',
-        message: 'Email addresses must be valid',
-        severity: 'error',
-        validate: (resume: any) => {
-          const issues: ValidationIssue[] = [];
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          
-          // Check personal information email
-          if (resume.personal_information?.email) {
-            if (!emailRegex.test(resume.personal_information.email)) {
-              issues.push({
-                type: 'rule',
-                severity: 'error',
-                message: 'Invalid email format in personal information',
-                ruleId: 'email-format',
-                path: 'personal_information.email',
-              });
-            }
-          }
-          
-          return {
-            valid: issues.length === 0,
-            issues,
-          };
-        },
-      },
-    ];
-    
-    return coreRules;
+    return getCoreRulesForVersion(version);
   }
 }
 
@@ -315,4 +286,58 @@ export function addCustomRule(rule: Rule): void {
  */
 export function removeCustomRule(ruleId: string): void {
   globalValidator.removeCustomRule(ruleId);
+}
+
+/**
+ * Add multiple custom validation rules globally
+ * Use case: Installing rule packages like @vitaeflow/rules-healthcare
+ */
+export function addCustomRules(rules: Rule[]): void {
+  rules.forEach(rule => globalValidator.addCustomRule(rule));
+}
+
+/**
+ * Remove all custom rules matching a specific category
+ * Use cases:
+ * - Disabling all ATS optimization rules for internal use
+ * - Removing compliance rules when changing jurisdictions
+ * - Clearing performance rules for development testing
+ */
+export function removeRulesByCategory(category: string): void {
+  const currentRules = globalValidator.getCustomRules();
+  const rulesToRemove = currentRules.filter(rule => rule.category === category);
+  rulesToRemove.forEach(rule => globalValidator.removeCustomRule(rule.id));
+}
+
+/**
+ * Get all custom rules in a specific category
+ * Use cases:
+ * - Auditing active compliance rules
+ * - Debugging ATS optimization settings
+ * - Generating rule documentation by category
+ */
+export function getRulesByCategory(category: string): Rule[] {
+  return globalValidator.getCustomRules().filter(rule => rule.category === category);
+}
+
+/**
+ * List all currently registered custom rules
+ * Use cases:
+ * - Admin interfaces showing active rules
+ * - Debugging validation configuration
+ * - Rule management dashboards
+ */
+export function listCustomRules(): Rule[] {
+  return globalValidator.getCustomRules();
+}
+
+/**
+ * Get a specific custom rule by its ID
+ * Use cases:
+ * - Rule configuration interfaces
+ * - Debugging specific rule failures
+ * - Dynamic rule modification
+ */
+export function getCustomRuleById(ruleId: string): Rule | undefined {
+  return globalValidator.getCustomRules().find(rule => rule.id === ruleId);
 }

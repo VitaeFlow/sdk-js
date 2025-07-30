@@ -49,8 +49,25 @@ export async function embedResume(
       schema_version: resume.schema_version || CURRENT_VERSION
     };
     
-    // Step 3: Serialize to JSON
-    const jsonData = JSON.stringify(resumeData, null, 2);
+    // Step 2a: Validate resume data if enabled
+    if (opts.validate !== false) {
+      const { validateResume } = await import('../validation/validator');
+      const validationResult = await validateResume(resumeData, {
+        version: resumeData.schema_version,
+        mode: 'strict',
+        validateRules: opts.validateRules
+      });
+      
+      if (!validationResult.ok) {
+        throw createError(
+          ErrorCode.INVALID_RESUME_DATA,
+          `Resume validation failed: ${validationResult.issues.filter(i => i.severity === 'error').map(i => i.message).join(', ')}`
+        );
+      }
+    }
+    
+    // Step 3: Serialize to JSON (optimized without formatting)
+    const jsonData = JSON.stringify(resumeData);
     const originalSize = getDataSize(jsonData);
     
     // Step 4: Calculate checksum

@@ -5,20 +5,37 @@
 
 import { CHECKSUM_ALGORITHM } from '../constants';
 
+// Cache for checksums to avoid recalculating for same string data
+const checksumCache = new Map<string, string>();
+
 /**
  * Calculate SHA-256 checksum of data
  * Works in both Node.js and browser environments
+ * Uses caching for string data to improve performance
  */
 export async function calculateChecksum(data: Buffer | Uint8Array | string): Promise<string> {
+  // Check cache for string data
+  if (typeof data === 'string' && checksumCache.has(data)) {
+    return checksumCache.get(data)!;
+  }
+  
   const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
   
+  let checksum: string;
   if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
     // Browser environment
-    return await calculateChecksumBrowser(bytes);
+    checksum = await calculateChecksumBrowser(bytes);
   } else {
     // Node.js environment
-    return calculateChecksumNode(bytes);
+    checksum = calculateChecksumNode(bytes);
   }
+  
+  // Cache result for string data
+  if (typeof data === 'string') {
+    checksumCache.set(data, checksum);
+  }
+  
+  return checksum;
 }
 
 /**

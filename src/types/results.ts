@@ -148,3 +148,31 @@ export interface MigrationResult {
    */
   steps: string[];
 }
+
+export interface HasResumeResult {
+  /**
+   * Whether the PDF contains VitaeFlow resume data
+   */
+  hasResume: boolean;
+
+  /**
+   * Source where the resume data was detected
+   * - 'xmp': Found via XMP metadata in PDF catalog
+   * - 'embedded': Found via embedded files dictionary
+   */
+  source?: 'xmp' | 'embedded';
+
+  /**
+   * Schema version detected from metadata (if available)
+   * Can be extracted from XMP without parsing the full JSON
+   */
+  version?: string;
+
+  /**
+   * Confidence level of the detection
+   * - 'high': Both XMP and embedded file present and consistent
+   * - 'medium': Either XMP or embedded file found
+   * - 'low': File found but metadata incomplete or inconsistent
+   */
+  confidence: 'high' | 'medium' | 'low';
+}

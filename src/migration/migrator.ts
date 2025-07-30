@@ -203,18 +203,259 @@ export class ResumeMigrator {
    * This is where future migration steps will be registered
    */
   private initializeMigrations(): void {
-    // Currently no migrations available since we only have v1.0.0
-    // Future migrations will be added here, for example:
+    // Example migrations for demonstration
+    // These show how to handle schema evolution patterns
     
-    // this.migrations.push({
-    //   fromVersion: '1.0.0',
-    //   toVersion: '1.1.0',
-    //   migrate: (data: any) => {
-    //     // Migration logic here
-    //     return data;
-    //   },
-    //   description: 'Add new fields for v1.1.0'
-    // });
+    // Migration 1.0.0 → 1.1.0: Add skills section
+    this.migrations.push({
+      fromVersion: '1.0.0',
+      toVersion: '1.1.0',
+      migrate: (data: any) => {
+        // Add skills section if missing
+        if (!data.skills) {
+          data.skills = {
+            technical: [],
+            languages: [],
+            soft_skills: []
+          };
+        }
+        
+        // Extract skills from work experience descriptions (basic NLP)
+        if (data.work_experience && Array.isArray(data.work_experience)) {
+          const commonTechSkills = ['javascript', 'python', 'java', 'react', 'node', 'sql', 'git'];
+          const foundSkills = new Set<string>();
+          
+          data.work_experience.forEach((exp: any) => {
+            if (exp.description) {
+              const desc = exp.description.toLowerCase();
+              commonTechSkills.forEach(skill => {
+                if (desc.includes(skill)) {
+                  foundSkills.add(skill.charAt(0).toUpperCase() + skill.slice(1));
+                }
+              });
+            }
+          });
+          
+          // Add found skills to technical skills (avoid duplicates)
+          foundSkills.forEach(skill => {
+            if (!data.skills.technical.some((s: any) => s.name === skill)) {
+              data.skills.technical.push({
+                name: skill,
+                level: 'intermediate', // Default level
+                years_experience: null
+              });
+            }
+          });
+        }
+        
+        return data;
+      },
+      description: 'Add skills section with automatic extraction from experience'
+    });
+    
+    // Migration 1.1.0 → 1.2.0: Restructure contact information
+    this.migrations.push({
+      fromVersion: '1.1.0',
+      toVersion: '1.2.0',
+      migrate: (data: any) => {
+        if (data.personal_information) {
+          const personal = data.personal_information;
+          
+          // Create new contact structure
+          const contact = {
+            email: personal.email,
+            phone: personal.phone,
+            social_media: {
+              linkedin: personal.linkedin_url || null,
+              github: personal.github_url || null,
+              website: personal.website_url || null
+            },
+            address: {
+              street: personal.address || null,
+              city: personal.city || null,
+              state: personal.state || null,
+              country: personal.country || null,
+              postal_code: personal.postal_code || null
+            }
+          };
+          
+          // Keep only core personal info
+          data.personal_information = {
+            full_name: personal.full_name,
+            birth_date: personal.birth_date,
+            nationality: personal.nationality
+          };
+          
+          // Add new contact section
+          data.contact_information = contact;
+          
+          // Clean up old fields
+          delete personal.phone;
+          delete personal.email;
+          delete personal.linkedin_url;
+          delete personal.github_url;
+          delete personal.website_url;
+          delete personal.address;
+          delete personal.city;
+          delete personal.state;
+          delete personal.country;
+          delete personal.postal_code;
+        }
+        
+        return data;
+      },
+      description: 'Restructure contact information into dedicated section'
+    });
+    
+    // Migration 1.2.0 → 1.3.0: Add performance metrics to work experience
+    this.migrations.push({
+      fromVersion: '1.2.0',
+      toVersion: '1.3.0',
+      migrate: (data: any) => {
+        if (data.work_experience && Array.isArray(data.work_experience)) {
+          data.work_experience.forEach((exp: any) => {
+            // Add metrics structure if not present
+            if (!exp.achievements) {
+              exp.achievements = [];
+            }
+            
+            if (!exp.metrics) {
+              exp.metrics = {
+                team_size: null,
+                budget_managed: null,
+                revenue_impact: null,
+                projects_completed: null
+              };
+            }
+            
+            // Try to extract metrics from description using regex
+            if (exp.description) {
+              const desc = exp.description;
+              
+              // Extract team size (e.g., "managed 5 developers", "team of 10")
+              const teamMatch = desc.match(/(?:team of|managed|led)\\s+(\\d+)/i);
+              if (teamMatch && !exp.metrics.team_size) {
+                exp.metrics.team_size = parseInt(teamMatch[1]);
+              }
+              
+              // Extract budget (e.g., "$1M budget", "€500K")
+              const budgetMatch = desc.match(/[\\$€£]([\\d,]+)([MK]?)\\s*(?:budget|managed)/i);
+              if (budgetMatch && !exp.metrics.budget_managed) {
+                let amount = parseInt(budgetMatch[1].replace(',', ''));
+                if (budgetMatch[2] === 'M') amount *= 1000000;
+                if (budgetMatch[2] === 'K') amount *= 1000;
+                exp.metrics.budget_managed = amount;
+              }
+              
+              // Extract project count (e.g., "delivered 15 projects")
+              const projectMatch = desc.match(/(?:delivered|completed|managed)\\s+(\\d+)\\s+projects?/i);
+              if (projectMatch && !exp.metrics.projects_completed) {
+                exp.metrics.projects_completed = parseInt(projectMatch[1]);
+              }
+            }
+          });
+        }
+        
+        return data;
+      },
+      description: 'Add performance metrics to work experience with automatic extraction'
+    });
+    
+    // Migration 1.0.0 → 2.0.0: Major breaking change (direct jump)
+    this.migrations.push({
+      fromVersion: '1.0.0',
+      toVersion: '2.0.0',
+      migrate: (data: any) => {
+        // Major restructuring for v2.0
+        const v2Data = {
+          schema_version: '2.0.0',
+          metadata: {
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            migrated_from: '1.0.0',
+            migration_notes: 'Automated migration from v1.0 to v2.0'
+          },
+          candidate: {
+            identity: {
+              name: data.personal_information?.full_name || 'Unknown',
+              birth_date: data.personal_information?.birth_date,
+              nationality: data.personal_information?.nationality
+            },
+            contact: {
+              primary_email: data.personal_information?.email,
+              phone_number: data.personal_information?.phone,
+              location: {
+                country: data.personal_information?.country,
+                city: data.personal_information?.city
+              }
+            }
+          },
+          professional: {
+            summary: data.summary || '',
+            experience: data.work_experience?.map((exp: any) => ({
+              organization: exp.company,
+              role: exp.position,
+              period: {
+                start: exp.start_date,
+                end: exp.end_date
+              },
+              description: exp.description,
+              technologies: exp.technologies || [],
+              achievements: exp.achievements || []
+            })) || [],
+            education: data.education?.map((edu: any) => ({
+              institution: edu.institution,
+              qualification: edu.degree,
+              field: edu.field_of_study,
+              period: {
+                start: edu.start_date,
+                end: edu.end_date
+              },
+              grade: edu.grade
+            })) || []
+          },
+          additional: {
+            certifications: data.certifications || [],
+            languages: data.languages || [],
+            projects: data.projects || [],
+            publications: data.publications || []
+          }
+        };
+        
+        return v2Data;
+      },
+      description: 'Major restructuring for v2.0 schema with improved organization'
+    });
+    
+    // Backward compatibility: 1.1.0 → 1.0.0 (downgrade)
+    this.migrations.push({
+      fromVersion: '1.1.0',
+      toVersion: '1.0.0',
+      migrate: (data: any) => {
+        // Remove v1.1 specific fields for backward compatibility
+        if (data.skills) {
+          // Move technical skills back to work experience descriptions
+          if (data.skills.technical && data.work_experience) {
+            const skillsText = data.skills.technical
+              .map((skill: any) => skill.name || skill)
+              .join(', ');
+            
+            if (skillsText && data.work_experience[0]) {
+              const currentDesc = data.work_experience[0].description || '';
+              data.work_experience[0].description = currentDesc + 
+                (currentDesc ? '\\n\\n' : '') + 
+                `Technologies used: ${skillsText}`;
+            }
+          }
+          
+          // Remove skills section
+          delete data.skills;
+        }
+        
+        return data;
+      },
+      description: 'Downgrade from v1.1 to v1.0 (remove skills section)'
+    });
   }
 }
 

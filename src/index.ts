@@ -7,7 +7,7 @@
 // Core functions
 export { embedResume } from './pdf/embed';
 export { extractResume } from './pdf/extract';
-export { hasResume } from './pdf/utils';
+export { hasResume, hasResumeDetailed } from './pdf/utils';
 
 // Types
 export type {
@@ -20,6 +20,7 @@ export type {
   ValidationResult,
   ExtractResult,
   MigrationResult,
+  HasResumeResult,
 } from './types';
 
 // Error handling
@@ -36,7 +37,16 @@ export {
 } from './constants';
 
 // Validation and migration
-export { validateResume, addCustomRule, removeCustomRule } from './validation/validator';
+export { 
+  validateResume, 
+  addCustomRule, 
+  removeCustomRule,
+  addCustomRules,
+  removeRulesByCategory,
+  getRulesByCategory,
+  listCustomRules,
+  getCustomRuleById
+} from './validation/validator';
 export { migrateResume, canMigrateResume, getVersionCompatibility } from './migration/migrator';
 
 // Utilities (for advanced use cases)

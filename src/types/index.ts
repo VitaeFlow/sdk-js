@@ -14,4 +14,5 @@ export type {
   ValidationResult,
   ExtractResult,
   MigrationResult,
+  HasResumeResult,
 } from './results';

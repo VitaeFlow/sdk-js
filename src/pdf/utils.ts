@@ -6,6 +6,7 @@ import { PDFDocument, PDFArray, PDFDict, PDFName, PDFString } from 'pdf-lib';
 import { ErrorCode, createError } from '../validation/errors';
 import { MAX_FILE_SIZE, RESUME_FILENAME } from '../constants';
 import { extractXMPFromPDF } from './xmp';
+import { HasResumeResult } from '../types/results';
 
 /**
  * Load and validate a PDF document
@@ -184,6 +185,12 @@ export function ensureUint8Array(data: Buffer | Uint8Array): Uint8Array {
 /**
  * Quick check if a PDF contains VitaeFlow resume data
  * Optimized for performance - no JSON parsing or full extraction
+ * 
+ * Use cases:
+ * - Quick UI feedback ("Resume detected") before full extraction
+ * - Batch processing to filter PDFs with embedded resumes
+ * - ATS systems doing preliminary checks
+ * - File validators checking VitaeFlow compliance
  */
 export async function hasResume(pdf: Buffer | Uint8Array): Promise<boolean> {
   try {
@@ -243,5 +250,102 @@ export async function hasResume(pdf: Buffer | Uint8Array): Promise<boolean> {
   } catch (error) {
     // Handle errors silently and return false
     return false;
+  }
+}
+
+/**
+ * Enhanced check for VitaeFlow resume data with detailed detection info
+ * Provides confidence levels and source information for better UX
+ * 
+ * Use cases:
+ * - Resume builders showing "Resume data quality: High confidence"
+ * - ATS systems displaying detection source for transparency  
+ * - Debug tools showing detection methodology
+ * - Analytics tracking detection success rates
+ */
+export async function hasResumeDetailed(pdf: Buffer | Uint8Array): Promise<HasResumeResult> {
+  try {
+    // Step 1: Load PDF (minimal)
+    const pdfDoc = await loadPDF(pdf);
+    
+    let hasXMP = false;
+    let hasEmbedded = false;
+    let xmpVersion: string | undefined;
+    
+    // Step 2: Check XMP metadata first (fastest check)
+    try {
+      const xmpData = extractXMPFromPDF(pdfDoc);
+      if (xmpData && xmpData.hasStructuredData) {
+        hasXMP = true;
+        xmpVersion = xmpData.specVersion;
+      }
+    } catch (error) {
+      // XMP check failed, continue to embedded files check
+    }
+    
+    // Step 3: Check for embedded "resume.json" file
+    try {
+      const catalog = pdfDoc.catalog;
+      const namesDictRef = catalog.get(PDFName.of('Names'));
+      
+      if (namesDictRef) {
+        // Resolve reference to get actual PDFDict
+        const namesDict = pdfDoc.context.lookup(namesDictRef);
+        if (namesDict && namesDict instanceof PDFDict) {
+          const embeddedFilesDictRef = namesDict.get(PDFName.of('EmbeddedFiles'));
+          if (embeddedFilesDictRef) {
+            // Resolve reference to get actual PDFDict
+            const embeddedFilesDict = pdfDoc.context.lookup(embeddedFilesDictRef);
+            if (embeddedFilesDict && embeddedFilesDict instanceof PDFDict) {
+              const namesArray = getEmbeddedFilesNamesArray(embeddedFilesDict);
+              if (namesArray) {
+                // Look for "resume.json" in the names array
+                const found = findEmbeddedFileByName(namesArray, RESUME_FILENAME, pdfDoc);
+                if (found !== null) {
+                  hasEmbedded = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Embedded files check failed, continue with what we have
+    }
+    
+    // Step 4: Determine confidence and source
+    if (hasXMP && hasEmbedded) {
+      return {
+        hasResume: true,
+        source: 'xmp', // Prefer XMP as primary source when both present
+        ...(xmpVersion && { version: xmpVersion }),
+        confidence: 'high'
+      };
+    } else if (hasXMP) {
+      return {
+        hasResume: true,
+        source: 'xmp',
+        ...(xmpVersion && { version: xmpVersion }),
+        confidence: 'medium' // XMP claims but no embedded file found
+      };
+    } else if (hasEmbedded) {
+      return {
+        hasResume: true,
+        source: 'embedded',
+        confidence: 'medium' // File exists but no XMP metadata
+      };
+    } else {
+      return {
+        hasResume: false,
+        confidence: 'high' // High confidence in negative result
+      };
+    }
+    
+  } catch (error) {
+    // Handle errors and return low confidence negative result
+    return {
+      hasResume: false,
+      confidence: 'low' // Error occurred, can't be sure
+    };
   }
 }
