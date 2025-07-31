@@ -20,36 +20,46 @@ describe('Embed/Extract Integration', () => {
     const pdfBytes = await pdfDoc.save();
     samplePDF = Buffer.from(pdfBytes);
 
-    // Create sample resume data
+    // Create sample resume data (v0.1.0 format)
     sampleResume = {
-      schema_version: '1.0.0',
-      personal_information: {
-        full_name: 'John Doe',
-        email: 'john.doe@example.com',
-        phone: '+1-555-0123',
+      specVersion: '0.1.0',
+      meta: {
+        language: 'en',
+        country: 'US',
+        source: 'test-data'
       },
-      work_experience: [
-        {
-          company: 'Tech Corp',
-          position: 'Senior Developer',
-          start_date: '2020-01-01',
-          end_date: '2023-12-31',
-          description: 'Led development of key features',
+      resume: {
+        basics: {
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'john.doe@example.com',
+          phone: '+1-555-0123',
         },
-      ],
-      education: [
-        {
-          institution: 'University of Tech',
-          degree: 'Bachelor of Science',
-          field_of_study: 'Computer Science',
-          start_date: '2016-09-01',
-          end_date: '2020-05-31',
+        experience: [
+          {
+            company: 'Tech Corp',
+            position: 'Senior Developer',
+            startDate: '2020-01-01',
+            endDate: '2023-12-31',
+            summary: 'Led development of key features',
+          },
+        ],
+        education: [
+          {
+            institution: 'University of Tech',
+            studyType: 'Bachelor of Science',
+            area: 'Computer Science',
+            startDate: '2016-09-01',
+            endDate: '2020-05-31',
+          },
+        ],
+        skills: {
+          technical: [
+            { name: 'TypeScript', level: 'expert' },
+            { name: 'React', level: 'advanced' },
+          ]
         },
-      ],
-      skills: [
-        { name: 'TypeScript', level: 'Expert' },
-        { name: 'React', level: 'Advanced' },
-      ],
+      },
     };
   });
 
@@ -79,7 +89,7 @@ describe('Embed/Extract Integration', () => {
       
       expect(extracted.ok).toBe(true);
       expect(extracted.metadata).toBeDefined();
-      expect(extracted.metadata?.version).toBe('1.0.0');
+      expect(extracted.metadata?.version).toBe('0.1.0');
       expect(extracted.metadata?.compressed).toBeDefined();
     });
 
@@ -124,8 +134,9 @@ describe('Embed/Extract Integration', () => {
       
       expect(result.ok).toBe(true);
       expect(result.data).toBeDefined();
-      expect(result.data?.personal_information?.full_name).toBe('John Doe');
-      expect(result.data?.personal_information?.email).toBe('john.doe@example.com');
+      expect(result.data?.resume?.basics?.firstName).toBe('John');
+      expect(result.data?.resume?.basics?.lastName).toBe('Doe');
+      expect(result.data?.resume?.basics?.email).toBe('john.doe@example.com');
       expect(result.issues.length).toBe(0);
     });
 
@@ -195,9 +206,13 @@ describe('Embed/Extract Integration', () => {
       // Second cycle (replace data)
       const modifiedResume = {
         ...sampleResume,
-        personal_information: {
-          ...sampleResume.personal_information!,
-          full_name: 'Jane Doe'
+        resume: {
+          ...sampleResume.resume!,
+          basics: {
+            ...sampleResume.resume!.basics,
+            firstName: 'Jane',
+            lastName: 'Doe'
+          }
         }
       };
       
@@ -205,7 +220,8 @@ describe('Embed/Extract Integration', () => {
       result = await extractResume(currentPDF);
       
       expect(result.ok).toBe(true);
-      expect(result.data?.personal_information?.full_name).toBe('Jane Doe');
+      expect(result.data?.resume?.basics?.firstName).toBe('Jane');
+      expect(result.data?.resume?.basics?.lastName).toBe('Doe');
     });
   });
 

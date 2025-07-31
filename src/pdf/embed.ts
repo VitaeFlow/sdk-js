@@ -43,17 +43,19 @@ export async function embedResume(
     // Step 1: Load and validate PDF
     const pdfDoc = await loadPDF(pdf);
     
-    // Step 2: Prepare resume data
+    // Step 2: Prepare resume data and detect version
+    const version = (resume as any).specVersion || (resume as any).schema_version || CURRENT_VERSION;
     const resumeData = {
       ...resume,
-      schema_version: resume.schema_version || CURRENT_VERSION
+      // Maintain version field based on format
+      ...(version === '0.1.0' ? { specVersion: version } : { schema_version: version })
     };
     
     // Step 2a: Validate resume data if enabled
     if (opts.validate !== false) {
       const { validateResume } = await import('../validation/validator');
       const validationResult = await validateResume(resumeData, {
-        version: resumeData.schema_version,
+        version: version,
         mode: 'strict',
         validateRules: opts.validateRules
       });

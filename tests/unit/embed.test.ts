@@ -18,21 +18,29 @@ describe('embedResume', () => {
     const pdfBytes = await pdfDoc.save();
     samplePDF = Buffer.from(pdfBytes);
 
-    // Create sample resume data
+    // Create sample resume data (new v0.1.0 format)
     sampleResume = {
-      schema_version: '1.0.0',
-      personal_information: {
-        full_name: 'John Doe',
-        email: 'john.doe@example.com'
+      specVersion: '0.1.0',
+      meta: {
+        language: 'en',
+        country: 'US',
+        source: 'test-data'
       },
-      work_experience: [
-        {
-          company: 'Test Company',
-          position: 'Developer',
-          start_date: '2020-01-01',
-          end_date: '2023-01-01'
-        }
-      ]
+      resume: {
+        basics: {
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'john.doe@example.com'
+        },
+        experience: [
+          {
+            company: 'Test Company',
+            position: 'Developer',
+            startDate: '2020-01-01',
+            endDate: '2023-01-01'
+          }
+        ]
+      }
     };
   });
 
@@ -71,7 +79,7 @@ describe('embedResume', () => {
       
       await expect(embedResume(invalidPDF, sampleResume))
         .rejects
-        .toHaveProperty('code', ErrorCode.INVALID_PDF);
+        .toHaveProperty('code', ErrorCode.CORRUPTED_PDF);
     });
 
     it('should reject file that is too large', async () => {
@@ -95,6 +103,29 @@ describe('embedResume', () => {
         compress: true
       });
       expect(result).toBeInstanceOf(Buffer);
+    });
+  });
+
+  describe('backward compatibility', () => {
+    it('should handle legacy v1.0.0 format', async () => {
+      const legacyResume = {
+        schema_version: '1.0.0',
+        personal_information: {
+          first_name: 'John',
+          last_name: 'Doe',
+          email: 'john.doe@example.com'
+        },
+        work_experience: [{
+          company: 'Test Company',
+          position: 'Developer',
+          start_date: '2020-01-01',
+          end_date: '2023-01-01'
+        }]
+      };
+      
+      const result = await embedResume(samplePDF, legacyResume);
+      expect(result).toBeInstanceOf(Buffer);
+      expect(result.length).toBeGreaterThan(samplePDF.length);
     });
   });
 });

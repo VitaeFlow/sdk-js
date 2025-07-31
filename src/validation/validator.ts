@@ -144,16 +144,31 @@ export class ResumeValidator {
 
   /**
    * Detect version from resume data
+   * Supports both new VitaeFlow format (specVersion) and legacy format (schema_version)
    */
   private detectVersion(data: any): string {
+    // Check for new VitaeFlow format first
+    if (data?.specVersion && typeof data.specVersion === 'string') {
+      return data.specVersion;
+    }
+    
+    // Check for legacy format
     if (data?.schema_version && typeof data.schema_version === 'string') {
       return data.schema_version;
     }
     
+    // Check $schema URL for version info
     if (data?.$schema && typeof data.$schema === 'string') {
-      const match = data.$schema.match(/v(\d+\.\d+\.\d+)/);
-      if (match) {
-        return match[1];
+      // Match new format: schemas/v0.1.0/vitaeflow.schema.json
+      const newMatch = data.$schema.match(/schemas\/v(\d+\.\d+\.\d+)\/vitaeflow\.schema\.json/);
+      if (newMatch) {
+        return newMatch[1];
+      }
+      
+      // Match legacy format: v1.0.0.json
+      const legacyMatch = data.$schema.match(/v(\d+\.\d+\.\d+)\.json/);
+      if (legacyMatch) {
+        return legacyMatch[1];
       }
     }
     

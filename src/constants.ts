@@ -3,7 +3,7 @@
  * Core constants used throughout the SDK
  */
 
-export const CURRENT_VERSION = '1.0.0';
+export const CURRENT_VERSION = '0.1.0';
 
 export const COMPRESS_THRESHOLD = 500 * 1024; // 500KB
 
@@ -11,11 +11,11 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export const RESUME_FILENAME = 'resume.json';
 
-export const VITAEFLOW_NAMESPACE = 'https://vitaeflow.org/ns/1.0/';
+export const VITAEFLOW_NAMESPACE = 'https://vitaeflow.org/ns/0.1.0/';
 
 export const CHECKSUM_ALGORITHM = 'SHA-256';
 
-export const VITAEFLOW_SPEC = 'org.vitaeflow.v1';
+export const VITAEFLOW_SPEC = 'org.vitaeflow.v0.1.0';
 
 export const VITAEFLOW_TYPE = 'resume';
 
