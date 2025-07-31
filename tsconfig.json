@@ -22,6 +22,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": false,
     "experimentalDecorators": false,
     "emitDecoratorMetadata": false
   },

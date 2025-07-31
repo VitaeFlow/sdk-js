@@ -1,14 +1,12 @@
 {
   "name": "@vitaeflow/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "JavaScript/TypeScript SDK for VitaeFlow - embed structured resume data in PDFs",
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
   "browser": "dist/index.umd.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.esm.js",
       "require": "./dist/index.js",
       "browser": "./dist/index.umd.js",
       "types": "./dist/index.d.ts"
@@ -20,10 +18,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build:types && npm run build:cjs && npm run build:esm && npm run build:browser",
+    "build": "npm run build:types && npm run build:cjs && npm run build:browser",
     "build:types": "tsc --emitDeclarationOnly",
     "build:cjs": "tsc --module commonjs --outDir dist",
-    "build:esm": "tsc --module esnext --outDir dist/esm && mv dist/esm/index.js dist/index.esm.js && rm -rf dist/esm",
+    "build:esm": "tsc -p tsconfig.esm.json && cp -r dist/esm/* dist/ && rm -rf dist/esm && mv dist/index.js dist/index.esm.js",
     "build:browser": "rollup -c",
     "dev": "tsc --watch",
     "test": "jest",
