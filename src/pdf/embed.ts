@@ -32,7 +32,7 @@ import {
  * Embed resume data into a PDF with triple metadata levels
  */
 export async function embedResume(
-  pdf: Buffer | Uint8Array,
+  pdf: Buffer | Uint8Array | string,
   resume: Resume,
   options: EmbedOptions = {}
 ): Promise<Buffer> {
@@ -40,8 +40,26 @@ export async function embedResume(
   const opts = { ...DEFAULT_EMBED_OPTIONS, ...options };
   
   try {
-    // Step 1: Load and validate PDF
-    const pdfDoc = await loadPDF(pdf);
+    // Step 1: Handle string input (create simple PDF)
+    let pdfData: Buffer | Uint8Array;
+    if (typeof pdf === 'string') {
+      // Create a simple PDF with the text content
+      const simplePdf = await PDFDocument.create();
+      const page = simplePdf.addPage();
+      const { width, height } = page.getSize();
+      page.drawText(pdf, {
+        x: 50,
+        y: height - 100,
+        size: 12
+      });
+      const pdfBytes = await simplePdf.save();
+      pdfData = Buffer.from(pdfBytes);
+    } else {
+      pdfData = pdf;
+    }
+    
+    // Step 2: Load and validate PDF
+    const pdfDoc = await loadPDF(pdfData);
     
     // Step 2: Prepare resume data and detect version
     const version = (resume as any).specVersion || (resume as any).schema_version || CURRENT_VERSION;

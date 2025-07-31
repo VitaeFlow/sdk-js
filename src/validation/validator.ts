@@ -7,7 +7,7 @@ import Ajv, { ErrorObject, ValidateFunction } from 'ajv';
 import { Resume } from '../types/resume';
 import { ValidationOptions, ValidationResult, ValidationIssue, Rule } from '../types';
 import { CURRENT_VERSION, DEFAULT_VALIDATION_OPTIONS } from '../constants';
-import { getResumeSchema } from '../schemas';
+import { getResumeSchema, getSchemaForData, SchemaOptions, detectVersionFromData, getAvailableSchemaVersions, findCompatibleVersion } from '../schemas';
 import { getCoreRulesForVersion } from './rules';
 
 /**
@@ -45,29 +45,84 @@ export class ResumeValidator {
     }
     
     // Step 1: Detect or use provided version
-    const version = opts.version || this.detectVersion(data);
+    const detectedVersion = opts.version || detectVersionFromData(data);
+    let actualVersion = detectedVersion;
     
-    // Step 2: Load and compile schema (with caching)
-    let validate = ResumeValidator.schemaCache.get(version);
+    // Step 2: Handle forward compatibility in 'compatible' mode
+    if (opts.mode === 'compatible') {
+      // In compatible mode, if we have a future version, try to find the best compatible version
+      const availableVersions = getAvailableSchemaVersions();
+      if (!availableVersions.includes(detectedVersion)) {
+        const compatibleVersion = findCompatibleVersion(detectedVersion, availableVersions);
+        if (compatibleVersion) {
+          actualVersion = compatibleVersion;
+          console.warn(`Using compatible schema version ${compatibleVersion} for requested ${detectedVersion}`);
+        }
+      }
+    }
+    
+    // Step 3: Load and compile schema (with caching and auto-download)
+    const cacheKey = `${actualVersion}-${opts.useRemoteSchema}-${opts.schemaUrl}`;
+    let validate = ResumeValidator.schemaCache.get(cacheKey);
+    
     if (!validate) {
-      const schema = getResumeSchema(version);
-      if (!schema) {
+      try {
+        // Use new schema resolution with auto-download capabilities
+        const schemaOptions: SchemaOptions = {};
+        
+        if (opts.useRemoteSchema !== undefined) schemaOptions.useRemoteSchema = opts.useRemoteSchema;
+        if (opts.cacheSchema !== undefined) schemaOptions.cacheSchema = opts.cacheSchema;
+        if (opts.fallbackToLocal !== undefined) schemaOptions.fallbackToLocal = opts.fallbackToLocal;
+        if (opts.remoteTimeout !== undefined) schemaOptions.remoteTimeout = opts.remoteTimeout;
+        if (opts.schemaUrl !== undefined) schemaOptions.schemaUrl = opts.schemaUrl;
+        
+        let schema = await getSchemaForData(data, schemaOptions);
+        
+        if (!schema) {
+          return {
+            ok: false,
+            schemaValid: false,
+            rulesValid: false,
+            version: detectedVersion,
+            issues: [{
+              type: 'schema',
+              severity: 'error',
+              message: `No schema available for version ${detectedVersion}`,
+              path: 'specVersion',
+            }],
+          };
+        }
+        
+        // In compatible mode, make schema more lenient for version fields
+        if (opts.mode === 'compatible' && actualVersion !== detectedVersion) {
+          schema = { ...schema };
+          
+          // Remove strict version constraints
+          if (schema.properties?.specVersion?.const) {
+            schema.properties.specVersion = { type: 'string' };
+          }
+          if (schema.properties?.schema_version?.const) {
+            schema.properties.schema_version = { type: 'string' };
+          }
+        }
+        
+        validate = this.ajv.compile(schema);
+        ResumeValidator.schemaCache.set(cacheKey, validate);
+        
+      } catch (error) {
         return {
           ok: false,
           schemaValid: false,
           rulesValid: false,
-          version,
+          version: detectedVersion,
           issues: [{
             type: 'schema',
             severity: 'error',
-            message: `No schema available for version ${version}`,
-            path: 'schema_version',
+            message: `Schema loading failed: ${error}`,
+            path: 'specVersion',
           }],
         };
       }
-      
-      validate = this.ajv.compile(schema);
-      ResumeValidator.schemaCache.set(version, validate);
     }
     
     // Step 3: Validate against schema
@@ -98,7 +153,7 @@ export class ResumeValidator {
         rulesOptions.maxIssues = opts.maxIssues;
       }
       
-      const rulesResult = await this.validateRules(data, version, rulesOptions);
+      const rulesResult = await this.validateRules(data, actualVersion, rulesOptions);
       rulesIssues = rulesResult.issues;
       rulesValid = rulesResult.valid;
     }
@@ -116,7 +171,7 @@ export class ResumeValidator {
       ok: !hasErrors,
       schemaValid,
       rulesValid,
-      version,
+      version: detectedVersion, // Return the original detected version
       issues,
     };
   }
@@ -142,38 +197,6 @@ export class ResumeValidator {
     return [...this.customRules];
   }
 
-  /**
-   * Detect version from resume data
-   * Supports both new VitaeFlow format (specVersion) and legacy format (schema_version)
-   */
-  private detectVersion(data: any): string {
-    // Check for new VitaeFlow format first
-    if (data?.specVersion && typeof data.specVersion === 'string') {
-      return data.specVersion;
-    }
-    
-    // Check for legacy format
-    if (data?.schema_version && typeof data.schema_version === 'string') {
-      return data.schema_version;
-    }
-    
-    // Check $schema URL for version info
-    if (data?.$schema && typeof data.$schema === 'string') {
-      // Match new format: schemas/v0.1.0/vitaeflow.schema.json
-      const newMatch = data.$schema.match(/schemas\/v(\d+\.\d+\.\d+)\/vitaeflow\.schema\.json/);
-      if (newMatch) {
-        return newMatch[1];
-      }
-      
-      // Match legacy format: v1.0.0.json
-      const legacyMatch = data.$schema.match(/v(\d+\.\d+\.\d+)\.json/);
-      if (legacyMatch) {
-        return legacyMatch[1];
-      }
-    }
-    
-    return CURRENT_VERSION;
-  }
 
   /**
    * Convert AJV errors to ValidationIssues
@@ -228,8 +251,8 @@ export class ResumeValidator {
       
       // Check version compatibility if appliesTo is specified
       if (rule.appliesTo) {
-        // TODO: Implement semver compatibility check
         // For now, assume all rules apply to all versions
+        // Future: Implement semver compatibility check when needed
       }
       
       return true;

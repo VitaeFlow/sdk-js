@@ -51,11 +51,16 @@ async function calculateChecksumBrowser(data: Uint8Array): Promise<string> {
  * Calculate checksum in Node.js using crypto module
  */
 function calculateChecksumNode(data: Buffer | Uint8Array): string {
-  // Dynamic import for Node.js crypto to avoid bundling issues
-  const crypto = require('crypto');
-  const hash = crypto.createHash('sha256');
-  hash.update(data);
-  return hash.digest('hex');
+  try {
+    // Use require for Node.js crypto - this will be replaced by build system for browser
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    hash.update(data);
+    return hash.digest('hex');
+  } catch (error) {
+    // Fallback for environments where crypto is not available
+    throw new Error('Crypto module not available. Use browser environment or Node.js with crypto support.');
+  }
 }
 
 /**

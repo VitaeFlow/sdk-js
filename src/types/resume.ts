@@ -109,7 +109,7 @@ export interface Education {
 // Technical skill with proficiency level
 export interface TechnicalSkill {
   name: string;
-  level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  level: 'beginner' | 'intermediate' | 'advanced' | 'expert' | string;
   yearsOfExperience?: number;
   category?: string;
 }

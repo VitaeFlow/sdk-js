@@ -20,6 +20,7 @@ describe('embedResume', () => {
 
     // Create sample resume data (new v0.1.0 format)
     sampleResume = {
+      $schema: 'https://vitaeflow.org/schemas/v0.1.0/vitaeflow.schema.json',
       specVersion: '0.1.0',
       meta: {
         language: 'en',

@@ -23,30 +23,52 @@ npm install @vitaeflow/sdk
 ## Quick Start
 
 ```typescript
-import { embedResume } from '@vitaeflow/sdk';
+import { embedResume, validateResume } from '@vitaeflow/sdk';
 import fs from 'fs';
 
 const pdfBuffer = fs.readFileSync('resume.pdf');
+
+// VitaeFlow v0.1.0 format with structured schema
 const resumeData = {
-  schema_version: '1.0.0',
-  personal_information: {
-    full_name: 'John Doe',
-    email: 'john.doe@example.com'
+  $schema: 'https://vitaeflow.org/schemas/v0.1.0/vitaeflow.schema.json',
+  specVersion: '0.1.0',
+  meta: {
+    language: 'en',
+    country: 'US',
+    source: 'manual-entry'
   },
-  work_experience: [
-    {
-      company: 'Acme Corp',
-      position: 'Software Engineer',
-      start_date: '2020-01-01',
-      end_date: '2023-01-01'
-    }
-  ]
+  resume: {
+    basics: {
+      firstName: 'John',
+      lastName: 'Doe',
+      email: 'john.doe@example.com',
+      phone: '+1-555-0123'
+    },
+    experience: [
+      {
+        position: 'Software Engineer',
+        company: 'Acme Corp',
+        startDate: '2020-01-01',
+        endDate: '2023-01-01',
+        current: false,
+        summary: 'Developed scalable web applications'
+      }
+    ]
+  }
 };
+
+// Validate resume data first
+const validation = await validateResume(resumeData);
+if (!validation.ok) {
+  console.error('Validation failed:', validation.issues);
+  process.exit(1);
+}
 
 // Embed resume data in PDF
 const enhancedPDF = await embedResume(pdfBuffer, resumeData, {
-  compress: 'auto',
-  skipXMP: false
+  validate: true,
+  validateRules: true,
+  compress: 'auto'
 });
 
 fs.writeFileSync('enhanced-resume.pdf', enhancedPDF);
@@ -73,13 +95,85 @@ fs.writeFileSync('enhanced-resume.pdf', enhancedPDF);
 - Native crypto for checksums
 - Compression with pako/zlib
 
-## Roadmap
+## Advanced Features
 
-🔄 **Next Phases**
-- Phase 2: PDF extraction and validation
-- Phase 3: Business rules and schema validation
-- Phase 4: Migration system
-- Phase 5: Templates and examples
+### ✅ Validation System
+- **Schema Validation**: Automatic validation against VitaeFlow schemas
+- **Business Rules**: Advanced content validation rules
+- **Multiple Modes**: `strict`, `compatible`, `lenient` validation modes
+- **Forward Compatibility**: Graceful handling of future schema versions
+
+### ✅ Schema Auto-Download
+- **Remote Schemas**: Automatic download from `$schema` URLs
+- **Local Fallback**: Falls back to bundled schemas when remote fails
+- **Caching**: In-memory caching of downloaded schemas
+- **Security**: Only trusted VitaeFlow schema URLs allowed
+
+### ✅ PDF Extraction
+- **Data Extraction**: Extract embedded resume data from PDFs
+- **Validation**: Validate extracted data automatically
+- **Legacy Support**: Handle both v0.1.0 and legacy v1.0.0 formats
+
+## Validation Modes
+
+### Strict Mode (Default)
+```typescript
+const result = await validateResume(resumeData, { mode: 'strict' });
+```
+- Enforces exact schema compliance
+- All business rules apply
+- Future versions use fallback schemas
+
+### Compatible Mode
+```typescript
+const result = await validateResume(resumeData, { mode: 'compatible' });
+```
+- **Forward Compatible**: Handles future minor/patch versions gracefully
+- Uses best available compatible schema
+- Relaxed version field validation for future versions
+- Ideal for production systems that need to handle newer data formats
+
+### Lenient Mode
+```typescript
+const result = await validateResume(resumeData, { mode: 'lenient' });
+```
+- Minimal validation
+- Skip most business rules
+- Use for data migration or development
+
+## Schema Auto-Download
+
+The SDK automatically downloads schemas from `$schema` URLs:
+
+```typescript
+const resumeData = {
+  $schema: 'https://vitaeflow.org/schemas/v0.1.0/vitaeflow.schema.json',
+  specVersion: '0.1.0',
+  // ... rest of data
+};
+
+// Schema will be automatically downloaded and cached
+const result = await validateResume(resumeData);
+```
+
+### Supported Schema URLs
+- `https://vitaeflow.org/schemas/v*/vitaeflow.schema.json`
+- `https://vitaeflow.github.io/vitaeflow-schemas/schemas/v*/vitaeflow.schema.json`
+- `https://cdn.jsdelivr.net/npm/@vitaeflow/vitae-schema@*/schemas/v*/vitaeflow.schema.json`
+
+### Manual Control
+```typescript
+// Disable auto-download
+const result = await validateResume(resumeData, { 
+  useRemoteSchema: false 
+});
+
+// Custom timeout
+const result = await validateResume(resumeData, { 
+  useRemoteSchema: true,
+  remoteTimeout: 10000  // 10 seconds
+});
+```
 
 ## Testing
 

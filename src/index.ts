@@ -7,6 +7,10 @@
 // Core functions
 export { embedResume } from './pdf/embed';
 export { extractResume } from './pdf/extract';
+
+// Aliases for compatibility
+export { embedResume as embedResumeInPDF } from './pdf/embed';
+export { extractResume as extractResumeFromPDF } from './pdf/extract';
 export { hasResume, hasResumeDetailed } from './pdf/utils';
 
 // Types
@@ -59,4 +63,4 @@ export {
 } from './utils/compression';
 
 // Version info
-export const version = '1.0.0';
+export const version = '0.1.2';

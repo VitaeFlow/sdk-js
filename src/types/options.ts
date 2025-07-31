@@ -88,10 +88,11 @@ export interface ValidationOptions {
   /**
    * Validation mode
    * - 'strict': strict validation with all rules
+   * - 'compatible': allow forward-compatible versions and use best available schema
    * - 'lenient': relaxed validation
    * @default 'strict'
    */
-  mode?: 'strict' | 'lenient';
+  mode?: 'strict' | 'compatible' | 'lenient';
 
   /**
    * Whether to validate business rules in addition to schema
@@ -114,6 +115,35 @@ export interface ValidationOptions {
    * Maximum number of issues to return (unlimited if not specified)
    */
   maxIssues?: number;
+
+  /**
+   * Enable auto-download of schema from $schema URL
+   * @default false
+   */
+  useRemoteSchema?: boolean;
+
+  /**
+   * Cache downloaded schemas in memory
+   * @default true
+   */
+  cacheSchema?: boolean;
+
+  /**
+   * Fallback to local package if remote schema fetch fails
+   * @default true
+   */
+  fallbackToLocal?: boolean;
+
+  /**
+   * Timeout for remote schema fetch in milliseconds
+   * @default 5000
+   */
+  remoteTimeout?: number;
+
+  /**
+   * Explicit schema URL to download from (overrides $schema from data)
+   */
+  schemaUrl?: string;
 }
 
 export interface Rule {
